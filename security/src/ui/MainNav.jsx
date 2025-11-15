@@ -31,14 +31,8 @@ function MainNav() {
           Homepage
         </NavLink>
       </li>
-      <li
-        className={list}
-        onClick={(e) => {
-          e.preventDefault();
-          navigate("/favourite");
-        }}
-      >
-        <NavLink className={link}>
+      <li className={list}>
+        <NavLink className={link} to={'/request'}>
           <HiOutlineHeart className={iconStyle} />
           Request
         </NavLink>
@@ -47,7 +41,7 @@ function MainNav() {
         className={list}
         onClick={(e) => {
           e.preventDefault();
-          navigate("/watchlist");
+          navigate("/test");
         }}
       >
         <NavLink className={link}>
