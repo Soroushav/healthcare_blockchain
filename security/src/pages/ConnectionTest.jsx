@@ -1,7 +1,7 @@
 import { ConnectButton } from "thirdweb/react";
 import { createThirdwebClient, getContract } from "thirdweb";
 import { sepolia } from "thirdweb/chains";
-import { useState } from "react";
+// import { useState } from "react";
 
 const client = createThirdwebClient({
   clientId: '849f73bc2fdbd0d8ae071c64cb55287a',
