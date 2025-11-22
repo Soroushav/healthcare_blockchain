@@ -5,7 +5,7 @@ import Dashboard
  from "./pages/Dashboard";
  import Request
  from "./pages/Request";
-import ConnectionTest from "./pages/ConnectionTest";
+import Certifications from "./pages/Certifications";
 function App() {
 
   return (
@@ -23,7 +23,7 @@ function App() {
             ></Route>
             <Route path="dashboard" element={<Dashboard/>}/>
             <Route path="request" element={<Request/>}/>
-            <Route path="test" element={<ConnectionTest/>}/>
+            <Route path="certifications" element={<Certifications/>} />
           </Route>
         </Routes>
       </BrowserRouter>
