@@ -74,7 +74,7 @@ export async function submitCertToFabric(
   schemaHash: string,
   expiresAt: number,
   status: number,
-  payload?: any // optional, in case you extend your chaincode to store it
+  payload: any 
 ): Promise<void> {
   const client = await newGrpcConnection();
   const identity = await newIdentity();
@@ -96,7 +96,7 @@ export async function submitCertToFabric(
       certHash,
       schemaHash,
       expiresAt.toString(),
-      status.toString()
+      JSON.stringify(payload)
     );
 
     console.log("Submitted certificate to Fabric:", {
@@ -139,6 +139,27 @@ export async function getCertFromFabric(certHash: string) {
     const json = raw.slice(start, end + 1);
     const cert = JSON.parse(json);
     return cert;
+  } finally {
+    gateway.close();
+    client.close();
+  }
+}
+
+export async function getAllCertsFromFabric() {
+  const client = await newGrpcConnection();
+  const gateway = connect({
+    client,
+    identity: await newIdentity(),
+    signer: await newSigner(),
+  });
+
+  try {
+    const network = gateway.getNetwork(CHANNEL_NAME);
+    const contract = network.getContract(CHAINCODE_NAME);
+
+    const bytes = await contract.evaluateTransaction("getAllCerts");
+    const raw = Buffer.from(bytes).toString("utf8");
+    return JSON.parse(raw);
   } finally {
     gateway.close();
     client.close();

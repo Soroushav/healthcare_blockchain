@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import CreateCertificateModal from '../components/CreateCertificateForm'; // Adjust path as needed
-
+import { shortenAddress, formatUnixDate } from '../utils/helperFunctions';
+import { useActiveAccount } from "thirdweb/react";
 import { 
   CheckCircle, 
   XCircle, 
@@ -11,55 +12,57 @@ import {
   Copy, 
   MoreVertical 
 } from 'lucide-react';
+import { getAllCertifications } from '../services/apiCertificate';
+import { useBlockchain } from '../context/BlockchainContext';
 
 // Mock Data
-const initialData = [
-  {
-    id: '1',
-    hash: '0xab...12cd',
-    requester: { name: 'Jhon Clavio', role: 'Product Designer', avatar: 'https://i.pravatar.cc/150?u=1' },
-    status: 'Pending',
-    issuedAt: 'April 14, 2022',
-    issuedTime: '5:20 PM',
-    expiry: 'April 14, 2024',
-  },
-  {
-    id: '2',
-    hash: '0xde...34fg',
-    requester: { name: 'Alex Smith', role: 'Product Designer', avatar: 'https://i.pravatar.cc/150?u=2' },
-    status: 'Active',
-    issuedAt: 'April 10, 2022',
-    issuedTime: '4:22 PM',
-    expiry: 'April 10, 2025',
-  },
-  {
-    id: '3',
-    hash: '0xgh...56ij',
-    requester: { name: 'Saleh Mohasoy', role: 'Product Designer', avatar: 'https://i.pravatar.cc/150?u=3' },
-    status: 'Suspended',
-    issuedAt: 'April 05, 2022',
-    issuedTime: '6:20 PM',
-    expiry: 'April 05, 2024',
-  },
-  {
-    id: '4',
-    hash: '0xkl...78mn',
-    requester: { name: 'Power Boy', role: 'Product Designer', avatar: 'https://i.pravatar.cc/150?u=4' },
-    status: 'Revoked',
-    issuedAt: 'April 04, 2022',
-    issuedTime: '6:30 PM',
-    expiry: 'N/A',
-  },
-  {
-    id: '5',
-    hash: '0xop...90qr',
-    requester: { name: 'Ruhan Ibn Tajul', role: 'Product Designer', avatar: 'https://i.pravatar.cc/150?u=5' },
-    status: 'Active',
-    issuedAt: 'April 02, 2022',
-    issuedTime: '10:20 AM',
-    expiry: 'April 02, 2025',
-  },
-];
+// const initialData = [
+//   {
+//     id: '1',
+//     hash: '0xab...12cd',
+//     requester: { name: 'Jhon Clavio', role: 'Product Designer', avatar: 'https://i.pravatar.cc/150?u=1' },
+//     status: 'Pending',
+//     issuedAt: 'April 14, 2022',
+//     issuedTime: '5:20 PM',
+//     expiry: 'April 14, 2024',
+//   },
+//   {
+//     id: '2',
+//     hash: '0xde...34fg',
+//     requester: { name: 'Alex Smith', role: 'Product Designer', avatar: 'https://i.pravatar.cc/150?u=2' },
+//     status: 'Active',
+//     issuedAt: 'April 10, 2022',
+//     issuedTime: '4:22 PM',
+//     expiry: 'April 10, 2025',
+//   },
+//   {
+//     id: '3',
+//     hash: '0xgh...56ij',
+//     requester: { name: 'Saleh Mohasoy', role: 'Product Designer', avatar: 'https://i.pravatar.cc/150?u=3' },
+//     status: 'Suspended',
+//     issuedAt: 'April 05, 2022',
+//     issuedTime: '6:20 PM',
+//     expiry: 'April 05, 2024',
+//   },
+//   {
+//     id: '4',
+//     hash: '0xkl...78mn',
+//     requester: { name: 'Power Boy', role: 'Product Designer', avatar: 'https://i.pravatar.cc/150?u=4' },
+//     status: 'Revoked',
+//     issuedAt: 'April 04, 2022',
+//     issuedTime: '6:30 PM',
+//     expiry: 'N/A',
+//   },
+//   {
+//     id: '5',
+//     hash: '0xop...90qr',
+//     requester: { name: 'Ruhan Ibn Tajul', role: 'Product Designer', avatar: 'https://i.pravatar.cc/150?u=5' },
+//     status: 'Active',
+//     issuedAt: 'April 02, 2022',
+//     issuedTime: '10:20 AM',
+//     expiry: 'April 02, 2025',
+//   },
+// ];
 
 const StatusChip = ({ status }) => {
   const styles = {
@@ -117,15 +120,43 @@ const ActionButtons = ({ status, userRole = 'publisher' }) => {
   );
 };
 
+const statusMapp = {
+  0: "Pending",
+}
+
 export default function Certifications() {
-  const [data] = useState(initialData);
+  const [data, setData] = useState();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const { isPublisher } = useBlockchain();
+  const account = useActiveAccount();
+  const [publisher, setPublisher] = useState(false);
+  useEffect(() => {
+        async function fetchData() {
+            try {
+                const result = await getAllCertifications();
+                setData(result);
+            } catch (error) {
+                console.error("Error fetching certifications:", error);
+            }
+        }
+
+        fetchData();
+    }, []);
+    useEffect(() => {
+        const check = async () => {
+            const pub = await isPublisher();
+            setPublisher(pub);
+        };
+        check();
+    }, [account]);
   return (
+
     <div className="min-h-screen bg-gray-50 p-8 font-sans text-slate-800">
       <CreateCertificateModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
       />
+      
       {/* Page Header */}
       <div className="max-w-7xl mx-auto mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -163,8 +194,8 @@ export default function Certifications() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {data.map((row) => (
-                <tr key={row.id} className="hover:bg-gray-50/80 transition-colors group">
+              {data?.map((row) => (
+                <tr key={row.certHash} className="hover:bg-gray-50/80 transition-colors group">
                   <td className="p-6">
                     <input type="checkbox" className="rounded border-gray-300 text-red-600 focus:ring-red-500" />
                   </td>
@@ -172,7 +203,7 @@ export default function Certifications() {
                   {/* ID / Hash */}
                   <td className="p-6">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-slate-700 font-medium">{row.hash}</span>
+                      <span className="font-mono text-slate-700 font-medium">{shortenAddress(row.certHash)}</span>
                       <button className="text-gray-300 hover:text-red-600 transition-colors">
                         <Copy size={14} />
                       </button>
@@ -183,39 +214,41 @@ export default function Certifications() {
                   <td className="p-6">
                     <div className="flex items-center gap-3">
                       <img 
-                        src={row.requester.avatar} 
-                        alt={row.requester.name} 
+                        src="https://i.pravatar.cc/150?u=1"
+                        alt={row.payload.fullName} 
                         className="w-10 h-10 rounded-full object-cover border border-gray-100"
                       />
                       <div>
-                        <div className="font-bold text-slate-900">{row.requester.name}</div>
-                        <div className="text-xs text-slate-400">{row.requester.role}</div>
+                        <div className="font-bold text-slate-900">{row.payload.fullName}</div>
                       </div>
                     </div>
                   </td>
 
                   {/* Status */}
                   <td className="p-6">
-                    <StatusChip status={row.status} />
+                    <StatusChip status={statusMapp[row.status]} />
                   </td>
 
                   {/* Issued At */}
                   <td className="p-6">
-                    <div className="text-sm font-medium text-slate-900">{row.issuedAt}</div>
-                    <div className="text-xs text-slate-400">{row.issuedTime}</div>
+                    <div className="text-sm font-medium text-slate-900">{formatUnixDate(row.issuedAt)}</div>
+                    <div className="text-xs text-slate-400">{formatUnixDate(row.issuedAt)}</div>
                   </td>
 
                   {/* Expiry */}
                   <td className="p-6">
-                    <div className="text-sm font-medium text-slate-900">{row.expiry}</div>
-                    {row.expiry !== 'N/A' && (
-                       <div className="text-xs text-slate-400">{row.issuedTime}</div>
+                    <div className="text-sm font-medium text-slate-900">{formatUnixDate(row.expiresAt)}</div>
+                    {row.expiresAt !== 'N/A' && (
+                       <div className="text-xs text-slate-400">{formatUnixDate(row.expiresAt)}</div>
                     )}
                   </td>
 
                   {/* Actions */}
                   <td className="p-6">
-                    <ActionButtons status={row.status} />
+                    {
+                      publisher && 
+                      <ActionButtons status={row.status} />
+                    }
                   </td>
                 </tr>
               ))}
