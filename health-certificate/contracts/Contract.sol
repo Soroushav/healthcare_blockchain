@@ -1,202 +1,227 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.23;
 
-import "@openzeppelin/contracts/access/AccessControl.sol"; // Gives you role-based permissions (e.g., admin, publisher). Instead of one owner, you can have multiple roles.
-
-import "@openzeppelin/contracts/security/Pausable.sol";
-
-import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 
 /**
- * @title HealthCertAnchor
- * @notice Public Ethereum anchor for healthcare certifications issued in a private network.
- *         Stores certificate hash + minimal metadata for public verification.
- *         All state changes mirror Hyperledger via a trusted publisher (bridge/oracle).
+ * @title NetworkDirectory
+ * @notice Manages:
+ *         - Admins (DEFAULT_ADMIN_ROLE)
+ *         - Publishers (PUBLISHER_ROLE) with metadata (name, joinedAt)
+ *         - Normal users (tracked explicitly)
  *
- *      - NO PHI on-chain. Only keccak256 hashes of off-chain payloads.
- *      - Cert identity on-chain = bytes32 certHash (e.g., keccak256(serialized JSON)).
- *      - Optional Merkle batch anchoring for gas-efficient proofs.
+ * Certificate data still lives off-chain / in Fabric.
  */
-
-contract HealthCertAnchor is AccessControl, Pausable {
+contract NetworkDirectory is AccessControlEnumerable {
+    /// @dev Role identifier for publishers.
     bytes32 public constant PUBLISHER_ROLE = keccak256("PUBLISHER_ROLE");
 
-    enum Status { Active, Suspended, Revoked }
+    // -------------------- Events --------------------
 
-    struct CertRecord {
-        bytes32 schemaHash;    // hash of the JSON Schema/spec used to issue
-        uint256  issuedAt;      // block timestamp when first anchored
-        uint256  expiresAt;     // 0 => no expiry
-        Status  status;        // Active/Suspended/Revoked
-        bool    exists;        // simple presence check
-    }
-
-    // Single-cert storage
-    mapping(bytes32 => CertRecord) public certifications; // certHash => record
-
-    // Merkle batch storage (optional)
-    struct BatchRoot {
-        bytes32 root;
-        uint64  anchoredAt;
-        bool    exists;
-    }
-    mapping(bytes32 => BatchRoot) public batch; // batchId => root info
-
-    // ----------------- Events -----------------
-    event PublisherAdded(address indexed account); // When you write indexed before a parameter, Solidity stores it in a topic that’s a searchable field in the blockchain log.
+    event PublisherAdded(address indexed account, string name, uint64 joinedAt);
     event PublisherRemoved(address indexed account);
+    event PublisherNameUpdated(address indexed account, string oldName, string newName);
+    event UserRegistered(address indexed account);
 
-    event CertAnchored(
-        bytes32 indexed certHash,
-        bytes32 indexed schemaHash,
-        uint256 issuedAt,
-        uint256 expiresAt,
-        Status status
-    );
-    event CertStatusUpdated(bytes32 indexed certHash, Status newStatus);
-    event CertExpiryUpdated(bytes32 indexed certHash, uint64 newExpiresAt);
+    // -------------------- Publisher metadata --------------------
 
-    event BatchAnchored(bytes32 indexed batchId, bytes32 indexed root, uint64 anchoredAt);
+    struct PublisherMetadata {
+        string name;
+        uint64 joinedAt;
+        bool exists;
+    }
 
-    // ----------------- Init -----------------
-    constructor(address admin, address initialPublisher) {
+    /// @notice On-chain metadata for each publisher.
+    mapping(address => PublisherMetadata) public publisherMetadata;
+
+    // -------------------- User registry --------------------
+
+    mapping(address => bool) public isUser;
+    address[] private _users;
+
+    /**
+     * @param admin                 Address that will receive DEFAULT_ADMIN_ROLE.
+     * @param initialPublisher      Optional initial publisher (can be address(0)).
+     * @param initialPublisherName  Optional name for the initial publisher.
+     */
+    constructor(
+        address admin,
+        address initialPublisher,
+        string memory initialPublisherName
+    ) {
+        require(admin != address(0), "admin is zero");
+
+        // Admin that can grant/revoke roles
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
+
+        // Optionally set up an initial publisher with metadata
         if (initialPublisher != address(0)) {
-            _grantRole(PUBLISHER_ROLE, initialPublisher);
-            emit PublisherAdded(initialPublisher);
+            _addPublisherWithMetadata(initialPublisher, initialPublisherName);
         }
     }
 
-    // ----------------- Admin/Pause -----------------
-    function addPublisher(address account) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    // ---------------------------------------------------------------------
+    // Internal helpers
+    // ---------------------------------------------------------------------
+
+    function _addPublisherWithMetadata(address account, string memory name) internal {
         _grantRole(PUBLISHER_ROLE, account);
-        emit PublisherAdded(account);
+
+        if (!publisherMetadata[account].exists) {
+            publisherMetadata[account] = PublisherMetadata({
+                name: name,
+                joinedAt: uint64(block.timestamp),
+                exists: true
+            });
+        } else {
+            // If already exists, just update the name (optional behavior)
+            publisherMetadata[account].name = name;
+        }
+
+        emit PublisherAdded(account, name, uint64(block.timestamp));
     }
 
-    function removePublisher(address account) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    // ---------------------------------------------------------------------
+    // Publisher management
+    // ---------------------------------------------------------------------
+
+    /**
+     * @notice Add a new publisher with a name.
+     * @dev Only callable by DEFAULT_ADMIN_ROLE.
+     */
+    function addPublisher(address account, string memory name)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        require(account != address(0), "zero address");
+        _addPublisherWithMetadata(account, name);
+    }
+
+    /**
+     * @notice Remove an existing publisher.
+     * @dev Only callable by DEFAULT_ADMIN_ROLE.
+     */
+    function removePublisher(address account)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
         _revokeRole(PUBLISHER_ROLE, account);
+        // keep metadata for history; if you want to wipe it:
+        // delete publisherMetadata[account];
         emit PublisherRemoved(account);
     }
 
-    function pause() external onlyRole(DEFAULT_ADMIN_ROLE) { _pause(); }
-    function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) { _unpause(); }
-
-    // ----------------- Single anchoring -----------------
     /**
-     * @dev Mirror a new certificate from Hyperledger (or re-anchor if not seen before).
-     * @param certHash keccak256 of your off-chain payload (encrypted if needed)
-     * @param schemaHash keccak256 of your issuance schema definition
-     * @param expiresAt unix seconds; 0 = no expiry
+     * @notice Update the stored name for a publisher.
+     * @dev Only callable by DEFAULT_ADMIN_ROLE.
      */
-    function anchorCertificate(
-        bytes32 certHash,
-        bytes32 schemaHash,
-        uint256  expiresAt
-    ) external whenNotPaused onlyRole(PUBLISHER_ROLE)
+    function setPublisherName(address account, string memory newName)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
     {
-        CertRecord storage r = certifications[certHash];
+        PublisherMetadata storage meta = publisherMetadata[account];
+        require(meta.exists, "publisher not found");
 
-        // First time anchoring
-        if (!r.exists) {
-            r.exists     = true;
-            r.schemaHash = schemaHash;
-            r.issuedAt   = uint256(block.timestamp);
-            r.expiresAt  = expiresAt;
-            r.status     = Status.Active;
-        } else {
-            // If already exists, allow schema rotation/expiry refresh to match private chain
-            // (We do NOT auto-change status here)
-            r.schemaHash = schemaHash;
-            r.expiresAt  = expiresAt;
+        string memory old = meta.name;
+        meta.name = newName;
+
+        emit PublisherNameUpdated(account, old, newName);
+    }
+
+    /**
+     * @notice Check if an address is a publisher.
+     */
+    function isPublisher(address account) external view returns (bool) {
+        return hasRole(PUBLISHER_ROLE, account);
+    }
+
+    /**
+     * @notice Total number of publishers.
+     */
+    function publisherCount() external view returns (uint256) {
+        return getRoleMemberCount(PUBLISHER_ROLE);
+    }
+
+    /**
+     * @notice Get publisher address at a given index.
+     * @dev Index must be < publisherCount().
+     */
+    function publisherAt(uint256 index) external view returns (address) {
+        return getRoleMember(PUBLISHER_ROLE, index);
+    }
+
+    /**
+     * @notice Get all publisher addresses.
+     * @dev For large sets this is a view function meant for off-chain calls.
+     */
+    function getAllPublishers() external view returns (address[] memory) {
+        uint256 count = getRoleMemberCount(PUBLISHER_ROLE);
+        address[] memory publishers = new address[](count);
+
+        for (uint256 i = 0; i < count; i++) {
+            publishers[i] = getRoleMember(PUBLISHER_ROLE, i);
         }
 
-        emit CertAnchored(certHash, schemaHash, r.issuedAt, r.expiresAt, r.status);
-    }
-
-    function setStatus(bytes32 certHash, Status newStatus)
-        external
-        whenNotPaused
-        onlyRole(PUBLISHER_ROLE)
-    {
-        CertRecord storage r = _requireCert(certHash);
-        r.status = newStatus;
-        emit CertStatusUpdated(certHash, newStatus);
-    }
-
-    function extendExpiry(bytes32 certHash, uint64 newExpiresAt)
-        external
-        whenNotPaused
-        onlyRole(PUBLISHER_ROLE)
-    {
-        CertRecord storage r = _requireCert(certHash);
-        // Allow setting to 0 (no expiry) or a later timestamp
-        require(newExpiresAt == 0 || newExpiresAt > r.expiresAt, "bad expiry");
-        r.expiresAt = newExpiresAt;
-        emit CertExpiryUpdated(certHash, newExpiresAt);
-    }
-
-    // ----------------- Batch anchoring (Merkle) -----------------
-    /**
-     * @notice Anchor a batch Merkle root. Leaves must encode:
-     *         keccak256(abi.encodePacked(certHash, schemaHash, expiresAt, statusByte))
-     *         where statusByte = uint8(Status).
-     */
-    function anchorBatch(bytes32 batchId, bytes32 root)
-        external
-        whenNotPaused
-        onlyRole(PUBLISHER_ROLE)
-    {
-        require(!batch[batchId].exists, "batch exists");
-        batch[batchId] = BatchRoot({ root: root, anchoredAt: uint64(block.timestamp), exists: true });
-        emit BatchAnchored(batchId, root, uint64(block.timestamp));
+        return publishers;
     }
 
     /**
-     * @dev Stateless verification against a stored batch root.
+     * @notice Convenience helper to fetch publisher status and metadata.
      */
-    function verifyInBatch(
-        bytes32 certHash,
-        bytes32 schemaHash,
-        uint64  expiresAt,
-        Status  status_,
-        bytes32 batchId,
-        bytes32[] calldata merkleProof
-    ) external view returns (bool isValid, string memory reason) {
-        BatchRoot memory b = batch[batchId];
-        if (!b.exists) return (false, "BATCH_NOT_FOUND");
-
-        bytes32 leaf = keccak256(abi.encodePacked(certHash, schemaHash, expiresAt, uint8(status_)));
-        bool included = MerkleProof.verify(merkleProof, b.root, leaf);
-        if (!included) return (false, "NOT_IN_BATCH");
-        if (status_ == Status.Revoked) return (false, "REVOKED");
-        if (status_ == Status.Suspended) return (false, "SUSPENDED");
-        if (expiresAt != 0 && block.timestamp > expiresAt) return (false, "EXPIRED");
-        return (true, "ACTIVE");
-    }
-
-    // ----------------- Read API -----------------
-    function verify(bytes32 certHash) external view returns (bool isValid, string memory reason) {
-        CertRecord storage r = certifications[certHash];
-        if (!r.exists) return (false, "NOT_FOUND");
-        if (r.status == Status.Revoked) return (false, "REVOKED");
-        if (r.status == Status.Suspended) return (false, "SUSPENDED");
-        if (r.expiresAt != 0 && block.timestamp > r.expiresAt) return (false, "EXPIRED");
-        return (true, "ACTIVE");
-    }
-
-    function get(bytes32 certHash)
+    function getPublisherInfo(address account)
         external
         view
-        returns (bool exists, bytes32 schemaHash, uint256 issuedAt, uint256 expiresAt, Status status_)
+        returns (bool isPub, string memory name, uint64 joinedAt)
     {
-        CertRecord storage r = certifications[certHash];
-        return (r.exists, r.schemaHash, r.issuedAt, r.expiresAt, r.status);
+        isPub = hasRole(PUBLISHER_ROLE, account);
+        PublisherMetadata memory meta = publisherMetadata[account];
+        name = meta.name;
+        joinedAt = meta.joinedAt;
     }
 
-    // ----------------- Internals -----------------
-    function _requireCert(bytes32 certHash) internal view returns (CertRecord storage) {
-        CertRecord storage r = certifications[certHash];
-        require(r.exists, "cert not anchored");
-        return r;
+    // ---------------------------------------------------------------------
+    // Normal user management
+    // ---------------------------------------------------------------------
+
+    /**
+     * @notice Register a normal user in the directory.
+     * @dev Only callable by DEFAULT_ADMIN_ROLE (e.g. your backend/oracle).
+     *      You can call this when a user submits their first certificate request.
+     */
+    function registerUser(address account)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        require(account != address(0), "zero address");
+
+        if (!isUser[account]) {
+            isUser[account] = true;
+            _users.push(account);
+            emit UserRegistered(account);
+        }
+    }
+
+    /**
+     * @notice Total number of registered users (non-role-specific).
+     */
+    function userCount() external view returns (uint256) {
+        return _users.length;
+    }
+
+    /**
+     * @notice Get user address at a given index.
+     * @dev Index must be < userCount().
+     */
+    function userAt(uint256 index) external view returns (address) {
+        require(index < _users.length, "index out of bounds");
+        return _users[index];
+    }
+
+    /**
+     * @notice Get all registered user addresses.
+     * @dev For large sets this is a view function meant for off-chain calls.
+     */
+    function getAllUsers() external view returns (address[] memory) {
+        return _users;
     }
 }

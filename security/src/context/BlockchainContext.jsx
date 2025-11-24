@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, useState, useEffect, useCallback } from "react";
 // import { useAddress, useContract, useContractWrite } from 'thirdweb/react';
 import { 
   useActiveAccount, 
@@ -17,25 +17,75 @@ const client = createThirdwebClient({
 const contract = getContract({
   client,
   chain: sepolia,
-  address: "0x1f94F96Ec739f609d45D0383dCCc8DBDF7973aB6", // your HealthCertAnchor
+  address: "0xC9ef3AFF9cd23E19Bbbd67290cf265D9572CC8F3", // your HealthCertAnchor
 });
 const PUBLISHER_ROLE = "0x0ac90c257048ef1c3e387c26d4a99bde06894efbcbff862dc1885c3a9319308a"
+const ADMIN_ROLE = "0x0000000000000000000000000000000000000000000000000000000000000000"
 
 function BlockchainProvider({ children }) {
+    const [memberCountValue, setMemberCountValue] = useState(null);
+    const [publisherCountValue, setPublisherCountValue] = useState(null);
     const account = useActiveAccount();
-    const { mutateAsync: sendTransaction, isPending } = useSendTransaction()
     const address  = account?.address || ""
+    const [isPublisher, setIsPublisher] = useState(false);
+    const [publishersList, setPublishersList] = useState([]);
+    const { mutateAsync: sendTransaction, isPending } = useSendTransaction()
+    const [isAdmin, setIsAdmin] = useState(false)
 
-    const addNewPublisher = async (form) => {
+    useEffect(() => {
+        if (!account) {
+            setIsAdmin(false);
+            return;
+        }
+        (async () => {
+            const a = await readContract({ contract, method: "function hasRole(bytes32 role, address account) view returns (bool)", params: [ADMIN_ROLE, address] });
+            setIsAdmin(a);
+        })();
+        }, [contract, account]);
+
+    useEffect(() => {
+        (async () => {
+            const m = await readContract({ contract, method: "function userCount() view returns (uint256)", params: [] });
+            const p = await readContract({ contract, method: "function publisherCount() view returns (uint256)", params: [] });
+            setMemberCountValue(Number(m));
+            setPublisherCountValue(Number(p));
+        })();
+        }, [contract]);
+
+    useEffect(() => {
+        if (!account) {
+            setIsPublisher(false);
+            return;
+        }
+
+        (async () => {
+            try {
+            const result = await readContract({
+                contract,
+                method:
+                "function isPublisher(address account) view returns (bool)",
+                params: [address],
+            });
+
+            setIsPublisher(result);
+            } catch (error) {
+            console.log("contract call failure", error);
+            setIsPublisher(false);
+            }
+        })();
+        }, [account, contract]);
+
+    
+    
+    const addNewPublisher = async (name, addr) => {
         if (!account) {
             throw new Error("No wallet connected");
         }
         try {
-            console.log(form.newPublisherAddress)
             const tx = prepareContractCall({
                 contract,
-                method: "function addPublisher(address account)",
-                params: [form.newPublisherAddress],
+                method: "unction addPublisher(address account, string name)",
+                params: [addr, name],
             })
             await sendTransaction(tx);
 
@@ -49,7 +99,6 @@ function BlockchainProvider({ children }) {
             throw new Error("No wallet connected");
         }
         try {
-            console.log(form.removePublisherAddress)
             const tx = prepareContractCall({
                 contract,
                 method: "function removePublisher(address account)",
@@ -63,26 +112,67 @@ function BlockchainProvider({ children }) {
         }
     }
 
-    const isPublisher = async () => {
+    const allPublishers = useCallback(async () => {
+        try {
+            const result = await readContract({
+                contract,
+                method: "function getAllPublishers() view returns (address[])",
+                params: [],
+            });
+
+            setPublishersList(result || []);   // store the real value
+        } catch (error) {
+            console.log("contract call failure", error);
+            setPublishersList([]);            // fallback
+        }
+    }, [contract]);
+
+    useEffect(() => {
+        allPublishers();   // run immediately
+    }, [allPublishers]);
+
+    const registerUser = async () => {
         if (!account) {
             throw new Error("No wallet connected");
         }
 
         try {
-            const result = await readContract({
+            const tx = prepareContractCall({
             contract,
             method:
-                "function hasRole(bytes32 role, address account) view returns (bool)",
-            params: [PUBLISHER_ROLE, address],
+                "function registerUser(address account)",
+            params: [address],
             });
 
-            // result is the returned bool
-            return result;
+            await sendTransaction(tx)
         } catch (error) {
             console.log("contract call failure", error);
             return false; // safe fallback
         }
-    };
+    }
+
+    const publisherInfo = async (addr) => {
+        try {
+            const result = await readContract({
+            contract,
+            method:
+                "function getPublisherInfo(address account) view returns (bool isPub, string name, uint64 joinedAt)",
+            params: [addr],
+            });
+
+            const [isPub, name, joinedAt] = result;
+
+            return {
+            isPub,
+            name,
+            joinedAt, 
+            };
+        } catch (error) {
+            console.log("contract call failure", error);
+            return false; // safe fallback
+        }
+    }
+
     return (
         <BlockchainContext.Provider
             value={{
@@ -91,7 +181,13 @@ function BlockchainProvider({ children }) {
                 address,
                 addNewPublisher,
                 removePublisher,
+                publishersList,
+                publisherCountValue,
                 isPublisher,
+                isAdmin,
+                registerUser,
+                memberCountValue,
+                publisherInfo,
                 isSubmitting: isPending,
             }}>
 

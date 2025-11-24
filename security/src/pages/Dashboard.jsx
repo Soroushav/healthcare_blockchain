@@ -1,5 +1,4 @@
 import React from 'react';
-import { useState, useEffect } from 'react';
 import { 
   AreaChart, 
   Area, 
@@ -91,22 +90,12 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 export default function Dashboard() {
   // 1. Get Client & Account Status
-  const { client, isPublisher } = useBlockchain();
+  const { client } = useBlockchain();
   const account = useActiveAccount();
   const isConnected = !!account;
-  const [publisher, setPublisher] = useState(false);
-  // Use real address if connected, otherwise placeholder
   const displayAddress = account ? `${account.address.slice(0, 6)}...${account.address.slice(-4)}` : 'Not Connected';
   const fullAddress = account ? account.address : '0x0000000000000000000000000000000000000000';
-
-  useEffect(() => {
-    const check = async () => {
-        const pub = await isPublisher();
-        setPublisher(pub);
-    };
-    check();
-}, [account]);
-  console.log(publisher)
+  const { memberCountValue, publisherCountValue, isPublisher } = useBlockchain();
   return (
     <div className="min-h-screen bg-gray-50/50 p-8 font-sans text-slate-800">
       
@@ -143,7 +132,7 @@ export default function Dashboard() {
                   <p className="text-sm text-slate-500">Connected Wallet Details</p>
                 </div>
                 <span className="px-3 py-1 rounded-full bg-red-50 text-red-700 text-xs font-bold border border-red-100 uppercase tracking-wider">
-                  {publisher ? "PUBLISHER" : "USER"}
+                  {isPublisher ? "PUBLISHER" : "USER"}
                 </span>
               </div>
 
@@ -202,16 +191,16 @@ export default function Dashboard() {
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full">
                 <StatCard 
                   title="Total Publishers" 
-                  value={networkStats.publishers} 
+                  value={publisherCountValue} 
                   icon={ShieldCheck} 
-                  colorClass="bg-blue-500 text-blue-600"
+                  colorClass="bg-blue-500/30 text-blue-600"
                   trend="+2 this week"
                 />
                 <StatCard 
                   title="Active Users" 
-                  value={networkStats.activeUsers.toLocaleString()} 
+                  value={publisherCountValue + memberCountValue} 
                   icon={Users} 
-                  colorClass="bg-purple-500 text-purple-600"
+                  colorClass="bg-purple-500/30 text-purple-600"
                   trend="+12% growth"
                 />
                 <div className="md:col-span-2">
@@ -219,7 +208,7 @@ export default function Dashboard() {
                     title="Certificates Issued" 
                     value={networkStats.totalCertificates.toLocaleString()} 
                     icon={FileBadge} 
-                    colorClass="bg-emerald-500 text-emerald-600"
+                    colorClass="bg-emerald-500/30 text-emerald-600"
                     trend="+850 today"
                   />
                 </div>
