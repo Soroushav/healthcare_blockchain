@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect} from 'react';
 import { 
   AreaChart, 
   Area, 
@@ -23,6 +23,7 @@ import {
 import { ConnectButton, useActiveAccount, lightTheme } from "thirdweb/react";
 import { sepolia } from "thirdweb/chains";
 import { useBlockchain } from "../context/BlockchainContext";
+import { certificatesCount } from '../services/apiCertificate';
 
 // --- Mock Data ---
 
@@ -92,10 +93,18 @@ export default function Dashboard() {
   // 1. Get Client & Account Status
   const { client } = useBlockchain();
   const account = useActiveAccount();
+  const [certCount, setCertCount] = useState();
   const isConnected = !!account;
   const displayAddress = account ? `${account.address.slice(0, 6)}...${account.address.slice(-4)}` : 'Not Connected';
   const fullAddress = account ? account.address : '0x0000000000000000000000000000000000000000';
   const { memberCountValue, publisherCountValue, isPublisher } = useBlockchain();
+
+  useEffect(() => {
+    (async () => {
+      const count = await certificatesCount();
+      setCertCount(count);
+    })();
+  }, []);
   return (
     <div className="min-h-screen bg-gray-50/50 p-8 font-sans text-slate-800">
       
@@ -166,11 +175,11 @@ export default function Dashboard() {
                   <div className="flex gap-4">
                      <div className="flex-1 bg-red-50/50 p-3 rounded-lg border border-red-100">
                         <p className="text-xs text-red-600 font-semibold mb-1">My Certificates</p>
-                        <p className="text-xl font-bold text-red-900">{mockUserStats.contributions}</p>
+                        <p className="text-xl font-bold text-red-900">-</p>
                      </div>
                      <div className="flex-1 bg-emerald-50/50 p-3 rounded-lg border border-emerald-100">
                         <p className="text-xs text-emerald-600 font-semibold mb-1">Trust Score</p>
-                        <p className="text-xl font-bold text-emerald-900">98%</p>
+                        <p className="text-xl font-bold text-emerald-900">-</p>
                      </div>
                   </div>
                 </div>
@@ -206,7 +215,7 @@ export default function Dashboard() {
                 <div className="md:col-span-2">
                   <StatCard 
                     title="Certificates Issued" 
-                    value={networkStats.totalCertificates.toLocaleString()} 
+                    value={certCount} 
                     icon={FileBadge} 
                     colorClass="bg-emerald-500/30 text-emerald-600"
                     trend="+850 today"

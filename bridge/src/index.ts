@@ -2,6 +2,10 @@ import express from "express";
 import cors from "cors";
 import certRequestsRouter from "./routes/certRequests";
 
+import dotenv from "dotenv";
+dotenv.config();
+
+import "./ethRegistry"
 const app = express();
 app.use(
   cors({

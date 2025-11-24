@@ -84,7 +84,7 @@ function BlockchainProvider({ children }) {
         try {
             const tx = prepareContractCall({
                 contract,
-                method: "unction addPublisher(address account, string name)",
+                method: "function addPublisher(address account, string name)",
                 params: [addr, name],
             })
             await sendTransaction(tx);
@@ -94,15 +94,16 @@ function BlockchainProvider({ children }) {
             console.log("contract call failure", error)
         }
     }
-    const removePublisher = async (form) => {
+    const removePublisher = async (addr) => {
         if (!account) {
             throw new Error("No wallet connected");
         }
         try {
+            console.log("This ", addr)
             const tx = prepareContractCall({
                 contract,
                 method: "function removePublisher(address account)",
-                params: [form.removePublisherAddress],
+                params: [addr],
             })
             await sendTransaction(tx);
 

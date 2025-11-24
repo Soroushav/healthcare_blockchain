@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import CreateCertificateModal from '../components/CreateCertificateForm'; // Adjust path as needed
 import { shortenAddress, formatUnixDate } from '../utils/helperFunctions';
 import { useActiveAccount } from "thirdweb/react";
+import CertificateDetailsModal from "../components/CertificateDetailsModal";
+
 import { 
   CheckCircle, 
   XCircle, 
@@ -12,7 +14,7 @@ import {
   Copy, 
   MoreVertical 
 } from 'lucide-react';
-import { getAllCertifications } from '../services/apiCertificate';
+import { changeStatus, getAllCertifications } from '../services/apiCertificate';
 import { useBlockchain } from '../context/BlockchainContext';
 
 // Mock Data
@@ -79,42 +81,64 @@ const StatusChip = ({ status }) => {
   );
 };
 
-const ActionButtons = ({ status, userRole = 'publisher' }) => {
+const ActionButtons = ({ status, certHash, onView }) => {
   // Logic based on your requirements
-  if (status === 'Pending' && userRole === 'publisher') {
-    return (
-      <div className="flex items-center gap-3">
-        <button className="flex items-center gap-1 text-emerald-600 hover:text-emerald-800 text-sm font-medium transition-colors">
-          <CheckCircle size={16} /> 
-        </button>
-        <button className="flex items-center gap-1 text-red-500 hover:text-red-700 text-sm font-medium transition-colors">
-          <XCircle size={16} /> 
-        </button>
-      </div>
-    );
-  }
+  if (status === 0) {
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        onClick={() => changeStatus({ certHash, newStatus: 1 })}
+        className="flex items-center gap-1 text-emerald-600 hover:text-emerald-800 text-sm font-medium transition-colors"
+      >
+        <CheckCircle size={16} />
+      </button>
+      <button
+        onClick={() => changeStatus({ certHash, newStatus: 3 })}
+        className="flex items-center gap-1 text-red-500 hover:text-red-700 text-sm font-medium transition-colors"
+      >
+        <XCircle size={16} />
+      </button>
+      <button
+        onClick={onView}
+        className="flex items-center gap-1 text-slate-500 hover:text-slate-800 text-sm font-medium transition-colors"
+      >
+        <Eye size={16} />
+      </button>
+    </div>
+  );
+}
 
-  if (status === 'Active') {
+  if (status === 1) {
     return (
       <div className="flex items-center gap-3">
-        <button className="group relative flex items-center gap-1 text-orange-500 hover:text-orange-700 text-sm font-medium transition-colors">
-           <PauseCircle size={16} /> 
-           <span className="hidden group-hover:inline"></span>
+        <button
+          onClick={() => changeStatus({ certHash, newStatus: 2 })}
+          className="group relative flex items-center gap-1 text-orange-500 hover:text-orange-700 text-sm font-medium transition-colors"
+        >
+          <PauseCircle size={16} />
         </button>
-        <button className="group relative flex items-center gap-1 text-red-500 hover:text-red-700 text-sm font-medium transition-colors">
-           <XCircle size={16} />
-           <span className="hidden group-hover:inline"></span>
+        <button
+          onClick={() => changeStatus({ certHash, newStatus: 3 })}
+          className="group relative flex items-center gap-1 text-red-500 hover:text-red-700 text-sm font-medium transition-colors"
+        >
+          <XCircle size={16} />
         </button>
-        <button className="flex items-center gap-1 text-slate-500 hover:text-slate-800 text-sm font-medium transition-colors">
+        <button
+          onClick={onView}
+          className="flex items-center gap-1 text-slate-500 hover:text-slate-800 text-sm font-medium transition-colors"
+        >
           <Eye size={16} />
         </button>
       </div>
     );
   }
 
-  // Default for Suspended/Revoked
+  // default (Suspended/Revoked)
   return (
-    <button className="flex items-center gap-1 text-slate-500 hover:text-slate-800 text-sm font-medium transition-colors">
+    <button
+      onClick={onView}
+      className="flex items-center gap-1 text-slate-500 hover:text-slate-800 text-sm font-medium transition-colors"
+    >
       <Eye size={16} /> View Details
     </button>
   );
@@ -122,6 +146,9 @@ const ActionButtons = ({ status, userRole = 'publisher' }) => {
 
 const statusMapp = {
   0: "Pending",
+  1: "Active",
+  2: "Suspended",
+  3: "Revoked"
 }
 
 export default function Certifications() {
@@ -129,11 +156,21 @@ export default function Certifications() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { isPublisher } = useBlockchain();
   const account = useActiveAccount();
-  const [publisher, setPublisher] = useState(false);
+  const { address } = useBlockchain();
+  const [selectedCert, setSelectedCert] = useState(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+
+  const handleViewDetails = (row) => {
+    setSelectedCert(row);
+    setIsDetailsOpen(true);
+    setSelectedCert(row)
+  };
+
   useEffect(() => {
         async function fetchData() {
+          if (!account) return;
             try {
-                const result = await getAllCertifications();
+                const result = await getAllCertifications({ address });
                 setData(result);
             } catch (error) {
                 console.error("Error fetching certifications:", error);
@@ -141,13 +178,6 @@ export default function Certifications() {
         }
 
         fetchData();
-    }, []);
-    useEffect(() => {
-        const check = async () => {
-            const pub = await isPublisher();
-            setPublisher(pub);
-        };
-        check();
     }, [account]);
   return (
 
@@ -155,6 +185,11 @@ export default function Certifications() {
       <CreateCertificateModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
+      />
+      <CertificateDetailsModal
+          isOpen={isDetailsOpen}
+          onClose={() => setIsDetailsOpen(false)}
+          cert={selectedCert}
       />
       
       {/* Page Header */}
@@ -216,10 +251,17 @@ export default function Certifications() {
                       <img 
                         src="https://i.pravatar.cc/150?u=1"
                         alt={row.payload.fullName} 
-                        className="w-10 h-10 rounded-full object-cover border border-gray-100"
+                        className={`w-10 h-10 rounded-full object-cover border border-gray-100 ${!isPublisher ? "blur-sm select-none pointer-events-none" : ""}`}
                       />
                       <div>
-                        <div className="font-bold text-slate-900">{row.payload.fullName}</div>
+                        <div
+                          className={`
+                            font-bold text-slate-900 
+                            ${!isPublisher ? "blur-sm select-none pointer-events-none" : ""}
+                          `}
+                        >
+                          {row.payload.fullName}
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -245,10 +287,21 @@ export default function Certifications() {
 
                   {/* Actions */}
                   <td className="p-6">
-                    {
-                      publisher && 
-                      <ActionButtons status={row.status} />
-                    }
+                    {isPublisher && (
+                      <ActionButtons
+                        status={row.status}
+                        certHash={row.certHash}
+                        onView={() => handleViewDetails(row)}
+                      />
+                    )}
+                    {!isPublisher && (
+                      <button
+                        onClick={() => handleViewDetails(row)}
+                        className="flex items-center gap-1 text-slate-500 hover:text-slate-800 text-sm font-medium transition-colors"
+                      >
+                        <Eye size={16} /> View Details
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -264,6 +317,9 @@ export default function Certifications() {
              <button className="px-3 py-1 border rounded hover:bg-gray-50">Next</button>
            </div>
         </div>
+
+
+        
       </div>
     </div>
   );

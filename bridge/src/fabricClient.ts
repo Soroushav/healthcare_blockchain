@@ -3,6 +3,8 @@ import { promises as fs } from "fs";
 import * as path from "path";
 import * as grpc from "@grpc/grpc-js";
 import * as crypto from "crypto";
+import { isPublisherOnEthereum } from "./ethRegistry";
+
 
 // runtime imports from fabric-gateway
 import { connect, signers } from "@hyperledger/fabric-gateway";
@@ -164,4 +166,57 @@ export async function getAllCertsFromFabric() {
     gateway.close();
     client.close();
   }
+}
+
+export async function getAllCertsForUser(walletAddress: string) {
+  const certs = await getAllCertsFromFabric();
+  const isPub = await isPublisherOnEthereum(walletAddress);
+
+  if (isPub) {
+    return certs;
+  }
+
+  return certs.map((c: any) => ({
+    certHash: c.certHash,
+    issuedAt: c.issuedAt,
+    expiresAt: c.expiresAt,
+    status: c.status,
+    payload: {
+      "fullName": "unauthorized"
+    }
+  }));
+}
+
+export async function updateCertStatusInFabric(
+  certHash: string,
+  newStatus: number
+): Promise<void> {
+  const client = await newGrpcConnection();
+  const gateway = connect({
+    client,
+    identity: await newIdentity(),
+    signer: await newSigner(),
+  });
+
+  try {
+    const network = gateway.getNetwork(CHANNEL_NAME);
+    const contract = network.getContract(CHAINCODE_NAME);
+
+    await contract.submitTransaction(
+      "setStatus",
+      certHash,
+      newStatus.toString()
+    );
+
+    console.log("Updated cert status in Fabric:", { certHash, newStatus });
+  } finally {
+    gateway.close();
+    client.close();
+  }
+}
+
+
+export async function getTotalCertCountFromFabric(): Promise<number> {
+  const certs = await getAllCertsFromFabric();
+  return Array.isArray(certs) ? certs.length : 0;
 }

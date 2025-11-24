@@ -4,11 +4,12 @@ import { ShieldCheck, Wallet, Trash2 } from "lucide-react";
 import { useBlockchain } from "../context/BlockchainContext";
 import { shortenAddress, formatUnixDate } from "../utils/helperFunctions";
 
-function PublisherRow({ walletAddress }) {
+function PublisherRow({ walletAddress, onRemove }) {
   const { publisherInfo, isAdmin } = useBlockchain();
   const [ joinedAt, setJoinedAt ] = useState(null);
   const [ name, setName ] = useState(null);
-  const [ isPub, setIsPub ] = useState(true)
+  const [ isPub, setIsPub ] = useState(true);
+
   useEffect(() => {
     (async () => {
       const { isPub, name, joinedAt } = await publisherInfo(walletAddress);
@@ -27,7 +28,7 @@ function PublisherRow({ walletAddress }) {
       <ShieldCheck size={20} />
       </div>
       <span className="font-semibold text-slate-900">
-      {isAdmin ? "Admin" : name}
+      {!name ? "Admin" : name}
       </span>
       </div>
       </td>
@@ -48,7 +49,7 @@ function PublisherRow({ walletAddress }) {
       {/* Remove button */}
       <td className="p-5 text-right">
       <button
-      // onClick={() => onRemove && onRemove(address, id)}
+      onClick={() => onRemove && onRemove(walletAddress)}
       // disabled={true}
       className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
       title="Remove Publisher"

@@ -8,12 +8,6 @@ import { useBlockchain } from "../context/BlockchainContext";
 import AddPublisherModal from "../components/AddPublisherModal"; 
 import PublisherRow from '../components/PublisherRow';
 
-// Mock data to make the UI look good immediately (Replace with real data from blockchain later)
-const MOCK_PUBLISHERS = [
-  { id: 1, name: 'Health Ministry', address: '0x71C...9A23', addedDate: 'Jan 12, 2024' },
-  { id: 2, name: 'Central Hospital', address: '0x3De...B12F', addedDate: 'Feb 20, 2024' },
-];
-
 function Request() {
   const { addNewPublisher, removePublisher, isSubmitting, publishersList, isAdmin } = useBlockchain();
   
@@ -26,8 +20,8 @@ function Request() {
   // 1. Add Publisher (Called by the Modal)
   const handleAddPublisher = async ({name, address}) => {
     try {
-      await addNewPublisher({ name: name, addr: address });
-      alert("Publisher added successfully!");
+      await addNewPublisher(name, address);
+      alert("Publisher added successfully! Please wait a couple of seconds because it can take a while...");
       setIsModalOpen(false);
     } catch (err) {
       console.error(err);
@@ -36,19 +30,17 @@ function Request() {
   };
 
   // 2. Remove Publisher (Called by the Trash Icon)
-  // const handleRemovePublisher = async (address, id) => {
-  //   if (!window.confirm(`Are you sure you want to revoke access for ${address}?`)) return;
+  const handleRemovePublisher = async (address) => {
+    if (!window.confirm(`Are you sure you want to revoke access for ${address}?`)) return;
 
-  //   try {
-  //     await removePublisher({ removePublisherAddress: address });
-
-  //     // setPublishers((prev) => prev.filter(p => p.id !== id));
-  //     alert("Publisher removed successfully!");
-  //   } catch (err) {
-  //     console.error(err);
-  //     alert("Failed to remove publisher");
-  //   }
-  // };
+    try {
+      await removePublisher(address);
+      alert("Publisher removed successfully! Please wait a couple of seconds because it can take a while...");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to remove publisher");
+    }
+  };
 
   // --- Render ---
 
@@ -110,7 +102,6 @@ function Request() {
             <tbody className="divide-y divide-gray-50">
               {publishersList
                 .filter((p) => {
-                  console.log(p)
                   if (!searchTerm.trim()) return true;
                   const term = searchTerm.toLowerCase();
                   return (
@@ -122,7 +113,7 @@ function Request() {
                   <PublisherRow 
                     key={p}
                     walletAddress={p}
-                    // later you can add: onRemove={handleRemovePublisher} id={p.id}
+                    onRemove={handleRemovePublisher}
                   />
                 ))
               }

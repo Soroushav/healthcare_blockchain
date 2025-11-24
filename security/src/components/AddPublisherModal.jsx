@@ -11,6 +11,7 @@ export default function AddPublisherModal({ isOpen, onClose, onSubmit, isSubmitt
   // Handle Form Submission
   const handleSubmit = (e) => {
     e.preventDefault();
+    console.log(name)
     // 1. Basic Validation
     if (!name.trim() || !address.trim()) {
       setError('Please fill in all fields.');
@@ -38,8 +39,6 @@ export default function AddPublisherModal({ isOpen, onClose, onSubmit, isSubmitt
       maxWidth="max-w-lg"
     >
       <div className="space-y-6">
-        <form handleSubmit={handleSubmit}>
-
         {/* Error Alert (only shows if there is an error) */}
         {error && (
           <div className="p-3 bg-red-50 border border-red-100 rounded-lg flex items-start gap-2 text-red-600 text-sm animate-in fade-in slide-in-from-top-1">
@@ -91,7 +90,8 @@ export default function AddPublisherModal({ isOpen, onClose, onSubmit, isSubmitt
             Cancel
           </button>
           
-          <button 
+          <button
+            onClick={handleSubmit} 
             disabled={isSubmitting}
             className="flex items-center gap-2 px-6 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 shadow-lg shadow-red-200 transition-all disabled:opacity-70 disabled:cursor-not-allowed"
           >
@@ -105,7 +105,6 @@ export default function AddPublisherModal({ isOpen, onClose, onSubmit, isSubmitt
             )}
           </button>
         </div>
-      </form>
       </div>
     </Modal>
   );

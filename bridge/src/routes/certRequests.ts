@@ -3,7 +3,7 @@ import { Router } from "express";
 import { submitCertToFabric } from "../fabricClient";
 import canonicalize from "canonical-json";
 import { keccak256, toUtf8Bytes } from "ethers";
-import { getAllCertsFromFabric } from "../fabricClient";
+import { getAllCertsForUser, updateCertStatusInFabric, getTotalCertCountFromFabric } from "../fabricClient";
 
 const router = Router();
 
@@ -39,15 +39,41 @@ router.post("/cert-requests", async (req, res) => {
   }
 });
 
-router.get("/certs", async (req, res) => {
+// router.get("/certs", async (req, res) => {
+//   try {
+//     const list = await getAllCertsFromFabric();
+//     res.json({ certs: list });
+//   } catch (err: any) {
+//     console.error(err);
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+
+router.post("/list", async (req, res)=> {
   try {
-    const list = await getAllCertsFromFabric();
-    res.json({ certs: list });
+    const { walletAddress } = req.body;
+
+    if (!walletAddress) {
+      return res.status(400).json({ error: "walletAddress is required" });
+    }
+
+    const data = await getAllCertsForUser(walletAddress);
+    res.json({ certs: data });
   } catch (err: any) {
     console.error(err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message || "Internal error" });
   }
+})
+
+router.post("/status", async (req, res) => {
+  const { certHash, status } = req.body;
+  await updateCertStatusInFabric(certHash, status);
+  res.json({ ok: true });
 });
 
+router.get("/count", async (_req, res) => {
+  const count = await getTotalCertCountFromFabric();
+  res.json({ count });
+});
 
 export default router;
