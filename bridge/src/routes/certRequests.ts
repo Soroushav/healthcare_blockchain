@@ -66,9 +66,19 @@ router.post("/list", async (req, res)=> {
 })
 
 router.post("/status", async (req, res) => {
-  const { certHash, status } = req.body;
-  await updateCertStatusInFabric(certHash, status);
-  res.json({ ok: true });
+  const { walletAddress, certHash, status } = req.body;
+
+  if (!walletAddress || !certHash || status === undefined) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  const updated = await updateCertStatusInFabric(walletAddress, certHash, status);
+
+  if (!updated) {
+    return res.status(403).json({ error: "Unauthorized: not a publisher" });
+  }
+
+  return res.json({ ok: true });
 });
 
 router.get("/count", async (_req, res) => {

@@ -47,12 +47,13 @@ export async function getAllCertifications({ address }) {
     return filtered
 }
 
-export async function changeStatus({ certHash, newStatus }) {
+export async function changeStatus({ walletAddress, certHash, newStatus }) {
   try {
     const res = await fetch("http://localhost:4000/api/status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        walletAddress: walletAddress,
         certHash: certHash,
         status: newStatus
       })

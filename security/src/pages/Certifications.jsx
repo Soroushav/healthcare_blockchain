@@ -190,6 +190,8 @@ export default function Certifications() {
           isOpen={isDetailsOpen}
           onClose={() => setIsDetailsOpen(false)}
           cert={selectedCert}
+          isPublisher={isPublisher}
+          walletAddress={address}
       />
       
       {/* Page Header */}

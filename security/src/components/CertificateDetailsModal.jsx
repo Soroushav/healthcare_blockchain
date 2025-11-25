@@ -30,6 +30,8 @@ export default function CertificateDetailsModal({
   isOpen,
   onClose,
   cert,
+  walletAddress,
+  isPublisher
 }) {
   if (!isOpen || !cert) return null;
   const statusLabel = STATUS_LABELS[cert.status] ?? "Unknown";
@@ -45,10 +47,10 @@ export default function CertificateDetailsModal({
       ? new Date(Number(cert.expiresAt) * 1000).toLocaleString()
       : "No expiry";
 
-  const canApprove = cert.status === 0; // Pending
+  const canApprove = cert.status === 0 && isPublisher; // Pending
 
   function handleApprove(){
-    changeStatus({ certHash: cert.certHash, newStatus: 1 })
+    changeStatus({ walletAddress: walletAddress, certHash: cert.certHash, newStatus: 1 })
   }
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">

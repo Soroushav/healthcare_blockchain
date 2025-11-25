@@ -1,8 +1,7 @@
-// bridge/src/fabricClient.ts
 import { promises as fs } from "fs";
 import * as path from "path";
-import * as grpc from "@grpc/grpc-js";
-import * as crypto from "crypto";
+import * as grpc from "@grpc/grpc-js"; // ?
+import * as crypto from "crypto"; // handle pk and crypto ops
 import { isPublisherOnEthereum } from "./ethRegistry";
 
 
@@ -19,19 +18,26 @@ const CHAINCODE_NAME = "healthcert";
 // 🔴 ADJUST THIS: point to your test-network organizations folder
 // Example if your layout is: /.../hyperledger/fabric-samples/test-network
 // and this file lives in /.../your-project/bridge/src
+
+// organization folder
 const CRYPTO_ROOT = path.resolve(
   __dirname,
   "../../hyperledger/fabric-samples/test-network/organizations"
 );
 
+// keystore directory containing private key for User1@org...
 const KEY_DIR = path.join(
   CRYPTO_ROOT,
   "peerOrganizations/org1.example.com/users/User1@org1.example.com/msp/keystore"
 );
+
+// full path to X.509 identity certificate?
 const CERT_PATH = path.join(
   CRYPTO_ROOT,
   "peerOrganizations/org1.example.com/users/User1@org1.example.com/msp/signcerts/cert.pem"
 );
+
+// path to TLS CA certificate to establish a secure TLS connection to the peer
 const TLS_CERT_PATH = path.join(
   CRYPTO_ROOT,
   "peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt"
@@ -188,9 +194,16 @@ export async function getAllCertsForUser(walletAddress: string) {
 }
 
 export async function updateCertStatusInFabric(
+  walletAddress: string,
   certHash: string,
   newStatus: number
-): Promise<void> {
+): Promise<boolean> {
+  const isPub = await isPublisherOnEthereum(walletAddress);
+  if (!isPub) {
+    console.warn("Unauthorized attempt to change status:", walletAddress);
+    return false;
+  }
+
   const client = await newGrpcConnection();
   const gateway = connect({
     client,
@@ -209,6 +222,11 @@ export async function updateCertStatusInFabric(
     );
 
     console.log("Updated cert status in Fabric:", { certHash, newStatus });
+    return true;
+
+  } catch (err) {
+    console.error("Fabric update error:", err);
+    return false;
   } finally {
     gateway.close();
     client.close();

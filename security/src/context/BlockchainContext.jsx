@@ -17,7 +17,7 @@ const client = createThirdwebClient({
 const contract = getContract({
   client,
   chain: sepolia,
-  address: "0xC9ef3AFF9cd23E19Bbbd67290cf265D9572CC8F3", // your HealthCertAnchor
+  address: "0xC9ef3AFF9cd23E19Bbbd67290cf265D9572CC8F3", 
 });
 const PUBLISHER_ROLE = "0x0ac90c257048ef1c3e387c26d4a99bde06894efbcbff862dc1885c3a9319308a"
 const ADMIN_ROLE = "0x0000000000000000000000000000000000000000000000000000000000000000"
