@@ -81,19 +81,19 @@ const StatusChip = ({ status }) => {
   );
 };
 
-const ActionButtons = ({ status, certHash, onView }) => {
+const ActionButtons = ({ status, certHash, onView, walletAddress }) => {
   // Logic based on your requirements
   if (status === 0) {
   return (
     <div className="flex items-center gap-3">
       <button
-        onClick={() => changeStatus({ certHash, newStatus: 1 })}
+        onClick={() => changeStatus({ walletAddress: walletAddress, certHash, newStatus: 1 })}
         className="flex items-center gap-1 text-emerald-600 hover:text-emerald-800 text-sm font-medium transition-colors"
       >
         <CheckCircle size={16} />
       </button>
       <button
-        onClick={() => changeStatus({ certHash, newStatus: 3 })}
+        onClick={() => changeStatus({ walletAddress: walletAddress, certHash, newStatus: 3 })}
         className="flex items-center gap-1 text-red-500 hover:text-red-700 text-sm font-medium transition-colors"
       >
         <XCircle size={16} />
@@ -112,13 +112,13 @@ const ActionButtons = ({ status, certHash, onView }) => {
     return (
       <div className="flex items-center gap-3">
         <button
-          onClick={() => changeStatus({ certHash, newStatus: 2 })}
+          onClick={() => changeStatus({ walletAddress: walletAddress, certHash, newStatus: 2 })}
           className="group relative flex items-center gap-1 text-orange-500 hover:text-orange-700 text-sm font-medium transition-colors"
         >
           <PauseCircle size={16} />
         </button>
         <button
-          onClick={() => changeStatus({ certHash, newStatus: 3 })}
+          onClick={() => changeStatus({ walletAddress: walletAddress, certHash, newStatus: 3 })}
           className="group relative flex items-center gap-1 text-red-500 hover:text-red-700 text-sm font-medium transition-colors"
         >
           <XCircle size={16} />
@@ -159,7 +159,6 @@ export default function Certifications() {
   const { address } = useBlockchain();
   const [selectedCert, setSelectedCert] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-
   const handleViewDetails = (row) => {
     setSelectedCert(row);
     setIsDetailsOpen(true);
@@ -291,9 +290,10 @@ export default function Certifications() {
                   <td className="p-6">
                     {isPublisher && (
                       <ActionButtons
-                        status={row.status}
-                        certHash={row.certHash}
-                        onView={() => handleViewDetails(row)}
+                      status={row.status}
+                      certHash={row.certHash}
+                      onView={() => handleViewDetails(row)}
+                      walletAddress={address}
                       />
                     )}
                     {!isPublisher && (

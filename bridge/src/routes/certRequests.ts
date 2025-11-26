@@ -3,15 +3,15 @@ import { Router } from "express";
 import { submitCertToFabric } from "../fabricClient";
 import canonicalize from "canonical-json";
 import { keccak256, toUtf8Bytes } from "ethers";
-import { getAllCertsForUser, updateCertStatusInFabric, getTotalCertCountFromFabric } from "../fabricClient";
+import { getAllCertsForUser, updateCertStatusInFabric, getTotalCertCountFromFabric, extendCertExpiry } from "../fabricClient";
 
 const router = Router();
 
 router.post("/cert-requests", async (req, res) => {
   try {
-    const { payload, certHash, schemaId, expiresAt } = req.body;
+    const { payload, certHash, schemaId, expiresAt, walletAddress, signature } = req.body;
 
-    if (!payload || !schemaId || !expiresAt) {
+    if (!payload || !schemaId || !expiresAt || !walletAddress || !signature) {
       return res.status(400).json({ error: "Missing fields" });
     }
 
@@ -25,7 +25,7 @@ router.post("/cert-requests", async (req, res) => {
     const schemaHash = keccak256(toUtf8Bytes(schemaId));
     console.log(payload)
     // status 0 = Pending
-    await submitCertToFabric(recomputedHash, schemaHash, expiresAt, 0, payload);
+    await submitCertToFabric(recomputedHash, schemaHash, expiresAt, 0, payload, walletAddress, signature);
 
     res.json({
       ok: true,
@@ -66,13 +66,12 @@ router.post("/list", async (req, res)=> {
 })
 
 router.post("/status", async (req, res) => {
-  const { walletAddress, certHash, status } = req.body;
-
+  const { walletAddress, certHash, status, signature } = req.body;
   if (!walletAddress || !certHash || status === undefined) {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
-  const updated = await updateCertStatusInFabric(walletAddress, certHash, status);
+  const updated = await updateCertStatusInFabric(walletAddress, certHash, status, signature);
 
   if (!updated) {
     return res.status(403).json({ error: "Unauthorized: not a publisher" });
@@ -85,5 +84,22 @@ router.get("/count", async (_req, res) => {
   const count = await getTotalCertCountFromFabric();
   res.json({ count });
 });
+
+router.post("/extend-expiry", async (req, res) => {
+  const { walletAddress, certHash, newExpiry, signature } = req.body;
+  console.log(walletAddress, "(((**********************)))")
+  if (!walletAddress || !certHash || !newExpiry) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  const updated = await extendCertExpiry(certHash, newExpiry, walletAddress, signature);
+
+  if (!updated) {
+    return res.status(403).json({ error: "Unauthorized: not a publisher" });
+  }
+
+  return res.json({ ok: true });
+});
+
 
 export default router;

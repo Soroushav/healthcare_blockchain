@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   X,
   ShieldCheck,
@@ -8,9 +8,11 @@ import {
   Hash,
   AlertCircle,
   CheckCircle2,
+  Save,
 } from "lucide-react";
 import { shortenAddress } from "../utils/helperFunctions";
-import { changeStatus } from "../services/apiCertificate";
+import { changeStatus, extendExpiry } from "../services/apiCertificate";
+
 // status: 0 = Pending, 1 = Active, 2 = Suspended, 3 = Revoked
 const STATUS_LABELS = {
   0: "Pending",
@@ -33,7 +35,11 @@ export default function CertificateDetailsModal({
   walletAddress,
   isPublisher
 }) {
+  // Local state for the new expiry date input
+  const [newExpiryDate, setNewExpiryDate] = useState("");
+
   if (!isOpen || !cert) return null;
+  
   const statusLabel = STATUS_LABELS[cert.status] ?? "Unknown";
   const statusClass =
     STATUS_COLORS[cert.status] ?? "bg-gray-100 text-gray-700 border-gray-200";
@@ -42,6 +48,7 @@ export default function CertificateDetailsModal({
   const issuedDate = cert.issuedAt
     ? new Date(Number(cert.issuedAt) * 1000).toLocaleString()
     : "—";
+    
   const expiresDate =
     cert.expiresAt && Number(cert.expiresAt) !== 0
       ? new Date(Number(cert.expiresAt) * 1000).toLocaleString()
@@ -49,9 +56,17 @@ export default function CertificateDetailsModal({
 
   const canApprove = cert.status === 0 && isPublisher; // Pending
 
-  function handleApprove(){
-    changeStatus({ walletAddress: walletAddress, certHash: cert.certHash, newStatus: 1 })
+  function handleApprove() {
+    changeStatus({ walletAddress: walletAddress, certHash: cert.certHash, newStatus: 1 });
   }
+
+  function handleExtendExpiry() {
+    if (!newExpiryDate) return;
+    const dateObj = new Date(newExpiryDate)
+    const expiryInSeconds = Math.floor(dateObj.getTime() / 1000);
+    extendExpiry({walletAddress: walletAddress, certHash: cert.certHash, newExpiry: expiryInSeconds})
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -123,19 +138,47 @@ export default function CertificateDetailsModal({
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Issued At
               </h3>
-              <div className="flex items-center gap-2 text-sm text-slate-700">
+              <div className="flex items-center gap-2 text-sm text-slate-700 min-h-[40px]">
                 <Calendar size={16} className="text-slate-400" />
                 {issuedDate}
               </div>
             </div>
+
+            {/* --- MODIFIED EXPIRES AT SECTION --- */}
             <div className="space-y-1">
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Expires At
               </h3>
-              <div className="flex items-center gap-2 text-sm text-slate-700">
+              
+              <div className="flex items-center gap-2 text-sm text-slate-700 mb-2">
                 <Clock size={16} className="text-slate-400" />
-                {expiresDate}
+                <span>{expiresDate}</span>
               </div>
+
+              {/* Edit Controls - Only visible to Publishers */}
+              {isPublisher && (
+                <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-100 flex flex-col gap-2 mt-2">
+                  <label className="text-[10px] font-bold uppercase text-indigo-600 tracking-wide">
+                    Set New Expiry
+                  </label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="datetime-local" 
+                      className="flex-1 text-xs border border-indigo-200 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-slate-700"
+                      onChange={(e) => setNewExpiryDate(e.target.value)}
+                      value={newExpiryDate}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleExtendExpiry}
+                      disabled={!newExpiryDate}
+                      className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded hover:bg-indigo-700 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                    >
+                      Extend expiry
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </section>
 
@@ -175,7 +218,7 @@ export default function CertificateDetailsModal({
             </div>
           </section>
 
-          {/* Type-specific info (simple example) */}
+          {/* Type-specific info */}
           <section>
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
               Certificate Payload
@@ -203,6 +246,8 @@ export default function CertificateDetailsModal({
             >
               Close
             </button>
+
+            {/* Note: Extend Expiry button removed from here as requested */}
 
             {canApprove && (
               <button

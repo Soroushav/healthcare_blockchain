@@ -1,12 +1,19 @@
+import { ethers } from "ethers";
 export async function addCertificate(payload, certHash) {
-    const now = new Date();
-    const nextYear = new Date(
-        now.getFullYear() + 1,
-        now.getMonth(),
-        now.getDate()
-        )
-    
-    const expiresAt = Math.floor(nextYear.getTime() / 1000)
+  const now = new Date();
+  const nextYear = new Date(
+      now.getFullYear() + 1,
+      now.getMonth(),
+      now.getDate()
+      )
+  
+  const provider = new ethers.BrowserProvider(window.ethereum);
+  const signer = await provider.getSigner();
+  const expiresAt = Math.floor(nextYear.getTime() / 1000)
+  const datastring = JSON.stringify(payload)
+  const signature = await signer.signMessage(datastring);
+  const userAddress = await signer.getAddress();
+
 
     const res = await fetch("http://localhost:4000/api/cert-requests", {
     method: "POST",
@@ -15,7 +22,9 @@ export async function addCertificate(payload, certHash) {
       payload,
       certHash,
       schemaId: payload.schemaVersion,
-      expiresAt
+      expiresAt,
+      walletAddress: userAddress,
+      signature
     })
   });
   if (!res.ok) {
@@ -49,13 +58,18 @@ export async function getAllCertifications({ address }) {
 
 export async function changeStatus({ walletAddress, certHash, newStatus }) {
   try {
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    const datastring = JSON.stringify(certHash)
+    const signature = await signer.signMessage(datastring);
     const res = await fetch("http://localhost:4000/api/status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         walletAddress: walletAddress,
         certHash: certHash,
-        status: newStatus
+        status: newStatus,
+        signature
       })
     });
 
@@ -71,6 +85,42 @@ export async function changeStatus({ walletAddress, certHash, newStatus }) {
   } catch (err) {
     console.error("Status update failed:", err);
     alert("Failed to update status. Please try again.");
+    return null;
+  }
+}
+
+export async function extendExpiry({ walletAddress, certHash, newExpiry }) {
+  try {
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    const datastring = JSON.stringify({
+      certHash: certHash,
+      newExpiry: newExpiry
+    })
+    const signature = await signer.signMessage(datastring);
+    const res = await fetch("http://localhost:4000/api/extend-expiry", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        walletAddress: walletAddress,
+        certHash: certHash,
+        newExpiry: newExpiry,
+        signature
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to update expiry");
+    }
+
+    alert("Expire Date updated successfully!");
+    return data;
+
+  } catch (err) {
+    console.error("Expiry update failed:", err);
+    alert("Failed to update Expiry date. Please try again.");
     return null;
   }
 }

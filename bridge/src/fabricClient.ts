@@ -10,6 +10,7 @@ import { connect, signers } from "@hyperledger/fabric-gateway";
 
 // type-only imports (because of verbatimModuleSyntax)
 import type { Identity, Signer, Gateway } from "@hyperledger/fabric-gateway";
+import { ethers } from "ethers";
 
 const MSP_ID = "Org1MSP";
 const CHANNEL_NAME = "mychannel";
@@ -37,7 +38,7 @@ const CERT_PATH = path.join(
   "peerOrganizations/org1.example.com/users/User1@org1.example.com/msp/signcerts/cert.pem"
 );
 
-// path to TLS CA certificate to establish a secure TLS connection to the peer
+// path to TLS CA certificate to establish a secure TLS connection to the peer (Prevent Man in the middle)
 const TLS_CERT_PATH = path.join(
   CRYPTO_ROOT,
   "peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt"
@@ -82,7 +83,9 @@ export async function submitCertToFabric(
   schemaHash: string,
   expiresAt: number,
   status: number,
-  payload: any 
+  payload: any,
+  walletAddress: string,
+  signature: string
 ): Promise<void> {
   const client = await newGrpcConnection();
   const identity = await newIdentity();
@@ -97,8 +100,16 @@ export async function submitCertToFabric(
   try {
     const network = gateway.getNetwork(CHANNEL_NAME);
     const contract = network.getContract(CHAINCODE_NAME);
+    const dataToVerify = JSON.stringify(payload);
 
-    // If you later extend your chaincode to accept payload JSON, add it here.
+    const recoveredAddress = ethers.verifyMessage(dataToVerify, signature);
+    if (recoveredAddress.toLowerCase() !== walletAddress.toLowerCase()) {
+      throw new Error(
+        `Signature Verification Failed: Recovered ${recoveredAddress} but expected ${walletAddress}`
+      );
+    }
+
+    console.log(recoveredAddress, "SUCCESS")
     await contract.submitTransaction(
       "issueOrUpdateCert",
       certHash,
@@ -196,7 +207,8 @@ export async function getAllCertsForUser(walletAddress: string) {
 export async function updateCertStatusInFabric(
   walletAddress: string,
   certHash: string,
-  newStatus: number
+  newStatus: number,
+  signature: string
 ): Promise<boolean> {
   const isPub = await isPublisherOnEthereum(walletAddress);
   if (!isPub) {
@@ -212,6 +224,16 @@ export async function updateCertStatusInFabric(
   });
 
   try {
+    const dataToVerify = JSON.stringify(certHash);
+
+    const recoveredAddress = ethers.verifyMessage(dataToVerify, signature);
+    if (recoveredAddress.toLowerCase() !== walletAddress.toLowerCase()) {
+      throw new Error(
+        `Signature Verification Failed: Recovered ${recoveredAddress} but expected ${walletAddress}`
+      );
+    }
+
+    console.log(recoveredAddress, "SUCCESS")
     const network = gateway.getNetwork(CHANNEL_NAME);
     const contract = network.getContract(CHAINCODE_NAME);
 
@@ -237,4 +259,67 @@ export async function updateCertStatusInFabric(
 export async function getTotalCertCountFromFabric(): Promise<number> {
   const certs = await getAllCertsFromFabric();
   return Array.isArray(certs) ? certs.length : 0;
+}
+
+
+export async function extendCertExpiry(
+  certHash: string,
+  newExpiry: number,
+  walletAddress: string,
+  signature: string
+): Promise<boolean> {
+
+  const dataToVerify = JSON.stringify({ 
+    certHash: certHash, 
+    newExpiry: newExpiry 
+  });
+
+  const recoveredAddress = ethers.verifyMessage(dataToVerify, signature);
+
+  if (recoveredAddress.toLowerCase() !== walletAddress.toLowerCase()) {
+    throw new Error(
+      `Signature Verification Failed: Recovered ${recoveredAddress} but expected ${walletAddress}`
+    );
+  }
+
+  const isPub = await isPublisherOnEthereum(walletAddress);
+  if (!isPub) {
+    throw new Error(`Permission Denied: ${walletAddress} is not an authorized Publisher.`);
+  }
+
+  const client = await newGrpcConnection();
+  const identity = await newIdentity();
+  const signer = await newSigner();
+
+  const gateway: Gateway = connect({
+    client,
+    identity,
+    signer,
+  });
+
+  try {
+    const network = gateway.getNetwork(CHANNEL_NAME);
+    const contract = network.getContract(CHAINCODE_NAME);
+
+    await contract.submitTransaction(
+      "extendExpiry",
+      certHash,
+      newExpiry.toString()
+    );
+
+    console.log("Successfully extended expiry in Fabric:", {
+      certHash,
+      newExpiry,
+      updatedBy: walletAddress
+    });
+    return true
+
+  } catch (error) {
+    console.error("Failed to extend expiry in Fabric:", error);
+    return false
+    throw error;
+  } finally {
+    gateway.close();
+    client.close();
+  }
 }

@@ -44,6 +44,7 @@ contract NetworkDirectory is AccessControlEnumerable {
      * @param initialPublisher      Optional initial publisher (can be address(0)).
      * @param initialPublisherName  Optional name for the initial publisher.
      */
+
     constructor(
         address admin,
         address initialPublisher,
