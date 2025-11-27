@@ -65,12 +65,32 @@ class HealthCertContract extends Contract {
         return record;
     }
 
-    async getCert(ctx, certHash) {
-        const key = this._key(certHash);
-        const bytes = await ctx.stub.getState(key);
-        if (!bytes || bytes.length === 0) throw new Error("NOT_FOUND");
+    async getCertsByWallet(ctx, walletAddress) {
+        const iterator = await ctx.stub.getStateByRange("", "");
+        const results = [];
 
-        return JSON.parse(bytes.toString());
+        while (true) {
+            const res = await iterator.next();
+            if (res.value && res.value.value.toString()) {
+                try {
+                    const cert = JSON.parse(res.value.value.toString());
+
+                    if (
+                        cert.walletAddress &&
+                        cert.walletAddress.toLowerCase() === walletAddress.toLowerCase()
+                    ) {
+                        results.push(cert);
+                    }
+                } catch (err) {
+                    console.error("Failed to parse cert:", err);
+                }
+            }
+
+            if (res.done) break;
+        }
+
+        await iterator.close();
+        return results;
     }
 
     async verify(ctx, certHash) {

@@ -14,7 +14,7 @@ import {
   Copy, 
   MoreVertical 
 } from 'lucide-react';
-import { changeStatus, getAllCertifications } from '../services/apiCertificate';
+import { changeStatus, getAllCertifications, getAllCertificationsForUser } from '../services/apiCertificate';
 import { useBlockchain } from '../context/BlockchainContext';
 
 // Mock Data
@@ -192,7 +192,7 @@ export default function Certifications() {
           isPublisher={isPublisher}
           walletAddress={address}
       />
-      
+      <button onClick={() => getAllCertificationsForUser(address)}>Click me</button>
       {/* Page Header */}
       <div className="max-w-7xl mx-auto mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>

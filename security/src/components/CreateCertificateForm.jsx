@@ -21,8 +21,8 @@ export default function CreateCertificateModal({ isOpen, onClose }) {
   }
 
   async function onSubmit(data) {
-    const certHash = computeCertHash(data);
-    await addCertificate(data, certHash); 
+    const certHash = computeCertHash({...data, walletAddress: address});
+    await addCertificate({...data, walletAddress: address}, certHash); 
   }
 
   return (

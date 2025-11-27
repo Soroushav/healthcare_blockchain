@@ -1,4 +1,5 @@
 import { ethers } from "ethers";
+
 export async function addCertificate(payload, certHash) {
   const now = new Date();
   const nextYear = new Date(
@@ -13,8 +14,6 @@ export async function addCertificate(payload, certHash) {
   const datastring = JSON.stringify(payload)
   const signature = await signer.signMessage(datastring);
   const userAddress = await signer.getAddress();
-
-
     const res = await fetch("http://localhost:4000/api/cert-requests", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -47,6 +46,36 @@ export async function getAllCertifications({ address }) {
     })
 
     const data = await res.json()
+    const certs = data.certs
+    const filtered = certs.filter(item => item.expiresAt !== null && 
+        item.expiresAt !== undefined &&
+        item.payload !== null &&
+        item.payload !== undefined && 
+        item.payload !== 0);
+    return filtered
+}
+
+
+export async function getAllCertificationsForUser({ address }) {
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    const userAddress = await signer.getAddress();
+    const datastring = JSON.stringify({
+      address: userAddress,
+      intent: "getCertsByWallet"
+    })
+    const signature = await signer.signMessage(datastring);
+    const res = await fetch("http://localhost:4000/api/list-wallet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          walletAddress: userAddress,
+          signature: signature
+        })
+    })
+
+    const data = await res.json()
+    console.log(data)
     const certs = data.certs
     const filtered = certs.filter(item => item.expiresAt !== null && 
         item.expiresAt !== undefined &&

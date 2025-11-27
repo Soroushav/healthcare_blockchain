@@ -130,7 +130,7 @@ export async function submitCertToFabric(
   }
 }
 
-export async function getCertFromFabric(certHash: string) {
+export async function getCertsByWalletFromFabric(walletAddress: string, signature: string) {
   const client = await newGrpcConnection();
   const gateway = connect({
     client,
@@ -139,25 +139,27 @@ export async function getCertFromFabric(certHash: string) {
   });
 
   try {
+    
     const network = gateway.getNetwork(CHANNEL_NAME);
     const contract = network.getContract(CHAINCODE_NAME);
-
-    const resultBytes = await contract.evaluateTransaction("getCert", certHash);
-
-    const raw = Buffer.from(resultBytes).toString("utf8");
-
-    console.log("RAW FROM FABRIC:", JSON.stringify(raw));
-
-    // If there is any junk around the JSON, slice it out
-    const start = raw.indexOf("{");
-    const end = raw.lastIndexOf("}");
-    if (start === -1 || end === -1) {
-      throw new Error(`Response is not JSON: ${raw}`);
+    const dataToVerify = JSON.stringify({
+      address: walletAddress,
+      intent: "getCertsByWallet",
+    });
+    const recovered = ethers.verifyMessage(dataToVerify, signature);
+    if (recovered.toLowerCase() !== walletAddress.toLowerCase()) {
+      throw new Error(
+        `Signature Verification Failed: Recovered ${recovered} but expected ${walletAddress}`
+      );
     }
+    console.log(walletAddress)
+    // Call your new chaincode function
+    const bytes = await contract.evaluateTransaction("getCertsByWallet", walletAddress);
 
-    const json = raw.slice(start, end + 1);
-    const cert = JSON.parse(json);
-    return cert;
+    const raw = Buffer.from(bytes).toString("utf8");
+    console.log("RAW FROM FABRIC:", raw);
+
+    return JSON.parse(raw);
   } finally {
     gateway.close();
     client.close();
